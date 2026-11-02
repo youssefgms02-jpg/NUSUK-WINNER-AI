@@ -18,7 +18,7 @@ services:
           name: nusuk-winner-ai-db
           property: connectionString
       - key: CORS_ORIGINS
-        value: https://nusuk-winner-ai.vercel.app
+        value: https://nusuk-winner-ai-tigeroz-s-projects.vercel.app
       - key: AI_API_KEY
         sync: false
       - key: AI_BASE_URL
