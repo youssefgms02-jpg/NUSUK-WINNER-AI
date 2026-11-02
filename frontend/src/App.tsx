@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {Activity,BrainCircuit,Check,Download,KeyRound,LayoutDashboard,Moon,Plus,ScanSearch,Search,Sun,Zap} from 'lucide-react';
-const API=import.meta.env.VITE_API_URL||'http://127.0.0.1:8000';
+const API=import.meta.env.VITE_API_URL||'https://nusuk-winner-ai-api.onrender.com';
 type KeyItem={id:number;code:string;source_name:string;status:string;reviewed:boolean;created_at:string};
 type Dash={total_keys:number;duplicates:number;reviewed:number;daily_keys:number;activity:{id:number;action:string;details:string;created_at:string}[]};
 const names:Record<string,string>={key_added:'إضافة رمز',duplicate_detected:'رمز مكرر',key_reviewed:'مراجعة رمز',source_added:'إضافة مصدر',public_scan:'فحص المصادر'};
