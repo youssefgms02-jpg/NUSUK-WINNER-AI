@@ -1,1 +1,16 @@
-{"name":"NUSUK WINNER AI","short_name":"NUSUK AI","start_url":"/","display":"standalone","background_color":"#101827","theme_color":"#101827","description":"مساعد ذكي لإدارة الرموز والأسئلة","icons":[]}
+{
+  "name": "NUSUK WINNER AI",
+  "short_name": "NUSUK AI",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#101827",
+  "theme_color": "#101827",
+  "description": "مساعد عربي لتنظيم المشاركة اليومية ومتابعة الأسئلة.",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {"src": "/nusuk-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ]
+}
