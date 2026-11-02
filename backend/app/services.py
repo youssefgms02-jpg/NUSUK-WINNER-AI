@@ -11,7 +11,7 @@ def log(db: Session, action: str, details: str = ""):
     db.add(Activity(action=action, details=details)); db.commit()
 
 def normalize(code: str) -> str:
-    return re.sub(r"\\s+", "", code).upper()
+    return re.sub(r"\s+", "", code).upper()
 
 def add_key(db: Session, payload):
     normalized = normalize(payload.code)
