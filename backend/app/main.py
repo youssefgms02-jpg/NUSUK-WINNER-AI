@@ -1,5 +1,4 @@
-import csv, io, json
-from urllib.parse import urlparse
+import asyncio, csv, io, json
 from datetime import datetime, timezone
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,18 +7,57 @@ from sqlalchemy.orm import Session
 from PIL import Image
 import pytesseract
 from .config import settings
-from .database import Base, engine, get_db
-from .models import KeyRecord, Activity, PublicSource, DailyKeyCount
-from .schemas import KeyCreate, KeyOut, ReviewUpdate, SourceCreate
-from .services import add_key, log, scan_public_feeds, ask_ai, validate_public_feed_url
+from .database import Base, engine, get_db, SessionLocal
+from .models import KeyRecord, Activity, PublicSource, DailyKeyCount, AppSetting
+from .schemas import KeyCreate, KeyOut, ReviewUpdate, SourceCreate, KeyCapUpdate
+from .services import add_key, log, scan_public_feeds, ask_ai, validate_public_feed_url, current_key_cap
 
 if settings.tesseract_cmd: pytesseract.pytesseract.tesseract_cmd=settings.tesseract_cmd
 Base.metadata.create_all(bind=engine)
-app=FastAPI(title="NUSUK WINNER AI API",version="0.1.0")
+app=FastAPI(title="NUSUK WINNER AI API",version="0.2.0")
 app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(",") if x.strip()],allow_credentials=False,allow_methods=["*"],allow_headers=["*"])
+scanner_task=None
+
+async def automatic_scan_loop():
+    while True:
+        db=SessionLocal()
+        try:
+            await scan_public_feeds(db)
+        except Exception as exc:
+            log(db,"automatic_scan_error",str(exc)[:180])
+        finally:
+            db.close()
+        await asyncio.sleep(1800)
+
+@app.on_event("startup")
+async def start_automatic_scanner():
+    global scanner_task
+    scanner_task=asyncio.create_task(automatic_scan_loop())
+
+@app.on_event("shutdown")
+async def stop_automatic_scanner():
+    global scanner_task
+    if scanner_task:
+        scanner_task.cancel()
+        try: await scanner_task
+        except asyncio.CancelledError: pass
 
 @app.get("/api/health")
 def health(): return {"status":"ok","app":"NUSUK WINNER AI"}
+
+@app.get("/api/settings")
+def read_settings(db:Session=Depends(get_db)):
+    return {"max_keys":current_key_cap(db),"current_keys":db.query(KeyRecord).count(),"scan_interval_minutes":30}
+
+@app.put("/api/settings/key-cap")
+def update_key_cap(payload:KeyCapUpdate,db:Session=Depends(get_db)):
+    setting=db.query(AppSetting).filter_by(name="max_keys").first()
+    if not setting:
+        setting=AppSetting(name="max_keys",value=str(payload.max_keys)); db.add(setting)
+    else: setting.value=str(payload.max_keys)
+    db.commit()
+    log(db,"scanner_limit_updated",f"تحديث الحد الأقصى إلى {payload.max_keys}")
+    return {"max_keys":payload.max_keys,"current_keys":db.query(KeyRecord).count()}
 
 @app.get("/api/dashboard")
 def dashboard(db:Session=Depends(get_db)):
@@ -63,10 +101,8 @@ def export_keys(format:str="csv",db:Session=Depends(get_db)):
 @app.post("/api/sources")
 def add_source(payload:SourceCreate,db:Session=Depends(get_db)):
     url=str(payload.feed_url)
-    try:
-        validate_public_feed_url(url)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    try: validate_public_feed_url(url)
+    except ValueError as exc: raise HTTPException(400,str(exc)) from exc
     if db.query(PublicSource).filter_by(feed_url=url).first(): raise HTTPException(409,"المصدر مسجل بالفعل")
     source=PublicSource(name=payload.name,feed_url=url); db.add(source); db.commit(); db.refresh(source)
     log(db,"source_added",f"إضافة مصدر عام: {payload.name}")
