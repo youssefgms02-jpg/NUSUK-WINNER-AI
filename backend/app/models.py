@@ -40,3 +40,9 @@ class DailyKeyCount(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     day: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
     count: Mapped[int] = mapped_column(Integer, default=0)
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    value: Mapped[str] = mapped_column(String(240), nullable=False)
