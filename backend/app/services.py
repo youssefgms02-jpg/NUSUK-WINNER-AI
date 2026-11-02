@@ -39,7 +39,7 @@ def log(db: Session, action: str, details: str = ""):
 
 
 def normalize(code: str) -> str:
-    return re.sub(r"\\s+", "", code).upper()
+    return re.sub(r"\s+", "", code).upper()
 
 
 def add_key(db: Session, payload):
