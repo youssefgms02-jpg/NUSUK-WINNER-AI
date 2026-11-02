@@ -26,3 +26,6 @@ class ReviewUpdate(BaseModel):
 class SourceCreate(BaseModel):
     name: str
     feed_url: HttpUrl
+
+class KeyCapUpdate(BaseModel):
+    max_keys: int = Field(ge=1, le=5000)
