@@ -63,7 +63,10 @@ def export_keys(format:str="csv",db:Session=Depends(get_db)):
 @app.post("/api/sources")
 def add_source(payload:SourceCreate,db:Session=Depends(get_db)):
     url=str(payload.feed_url)
-    try:\n        validate_public_feed_url(url)\n    except ValueError as exc:\n        raise HTTPException(400, str(exc)) from exc
+    try:
+        validate_public_feed_url(url)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     if db.query(PublicSource).filter_by(feed_url=url).first(): raise HTTPException(409,"المصدر مسجل بالفعل")
     source=PublicSource(name=payload.name,feed_url=url); db.add(source); db.commit(); db.refresh(source)
     log(db,"source_added",f"إضافة مصدر عام: {payload.name}")
