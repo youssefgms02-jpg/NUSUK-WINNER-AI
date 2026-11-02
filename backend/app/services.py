@@ -8,11 +8,12 @@ import feedparser
 import httpx
 from sqlalchemy.orm import Session
 
-from .models import KeyRecord, Activity, PublicSource, DailyKeyCount
+from .models import KeyRecord, Activity, PublicSource, DailyKeyCount, AppSetting
 from .config import settings
 
 CODE_PATTERN = re.compile(r"(?<![A-Za-z0-9])([A-Za-z0-9][A-Za-z0-9_-]{5,39})(?![A-Za-z0-9])")
 MAX_FEED_BYTES = 2 * 1024 * 1024
+DEFAULT_KEY_CAP = 100
 
 
 def validate_public_feed_url(url: str) -> None:
@@ -42,6 +43,11 @@ def normalize(code: str) -> str:
     return re.sub(r"\s+", "", code).upper()
 
 
+def current_key_cap(db: Session) -> int:
+    setting = db.query(AppSetting).filter_by(name="max_keys").first()
+    return max(1, min(5000, int(setting.value))) if setting else DEFAULT_KEY_CAP
+
+
 def add_key(db: Session, payload):
     normalized = normalize(payload.code)
     existing = db.query(KeyRecord).filter_by(normalized_code=normalized).first()
@@ -69,9 +75,16 @@ def add_key(db: Session, payload):
 
 async def scan_public_feeds(db: Session):
     found = []
+    cap = current_key_cap(db)
+    total = db.query(KeyRecord).count()
+    if total >= cap:
+        log(db, "public_scan_limit", f"تم الوصول إلى الحد الأقصى ({cap})")
+        return found
     client_timeout = httpx.Timeout(12.0, connect=5.0)
     async with httpx.AsyncClient(timeout=client_timeout, follow_redirects=False, headers={"User-Agent": "NusukWinnerAI/1.0 public-feed-reader"}) as client:
         for source in db.query(PublicSource).filter_by(enabled=True).all():
+            if total >= cap:
+                break
             try:
                 validate_public_feed_url(source.feed_url)
                 response = await client.get(source.feed_url)
@@ -80,8 +93,18 @@ async def scan_public_feeds(db: Session):
                     raise ValueError("حجم الموجز أكبر من الحد المسموح")
                 parsed = feedparser.parse(response.content)
                 for entry in parsed.entries[:100]:
-                    blob = " ".join([str(entry.get("title", "")), str(entry.get("summary", ""))])
+                    blob = " ".join([
+                        str(entry.get("title", "")),
+                        str(entry.get("summary", "")),
+                        str(entry.get("description", "")),
+                        str(entry.get("content", [{}])[0].get("value", "") if entry.get("content") else "")
+                    ])
                     for match in CODE_PATTERN.findall(blob):
+                        existing = db.query(KeyRecord).filter_by(normalized_code=normalize(match)).first()
+                        if existing:
+                            continue
+                        if total >= cap:
+                            break
                         class Payload:
                             pass
                         payload = Payload()
@@ -89,15 +112,20 @@ async def scan_public_feeds(db: Session):
                         payload.category = "من مصدر عام"
                         payload.source_name = source.name
                         payload.source_url = str(entry.get("link", ""))
-                        payload.notes = "اكتُشف آليًا؛ يحتاج مراجعة وتأكيدًا رسميًا."
+                        payload.notes = "اكتُشف آليًا من موجز عام؛ يحتاج مراجعة وتأكيدًا رسميًا."
                         item, duplicate = add_key(db, payload)
-                        found.append({"code": item.code, "duplicate": duplicate, "source": source.name, "url": payload.source_url})
+                        found.append({"code": item.code, "duplicate": duplicate, "source": source.name, "url": payload.source_url, "published": str(entry.get("published", ""))})
+                        if not duplicate:
+                            total += 1
+                    if total >= cap:
+                        break
                 source.last_checked = datetime.now(timezone.utc)
+                db.commit()
             except Exception as exc:
                 source.last_checked = datetime.now(timezone.utc)
+                db.commit()
                 log(db, "source_scan_error", f"{source.name}: {str(exc)[:180]}")
-    db.commit()
-    log(db, "public_scan", f"فحص {len(db.query(PublicSource).all())} مصدر عام")
+    log(db, "public_scan", f"فحص المصادر العامة؛ أُضيف {len(found)} نتيجة، والإجمالي {total}/{cap}")
     return found
 
 
