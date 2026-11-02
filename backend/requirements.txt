@@ -1,0 +1,10 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+sqlalchemy==2.0.40
+pydantic-settings==2.9.1
+python-multipart==0.0.20
+httpx==0.28.1
+feedparser==6.0.11
+pytesseract==0.3.13
+Pillow==11.2.1
+openai==1.78.1
